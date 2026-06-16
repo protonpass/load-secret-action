@@ -1,0 +1,66 @@
+name: Test
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  unit-tests:
+    name: Unit tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: 'npm'
+
+      - run: npm ci
+
+      - run: npm test
+
+  integration-output:
+    name: Integration (step outputs)
+    runs-on: ubuntu-latest
+    # Skipped on forks where the secret is unavailable
+    if: ${{ secrets.PROTON_PASS_TEST_PAT != '' }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Load secrets as step outputs
+        id: secrets
+        uses: ./
+        env:
+          PROTON_PASS_PERSONAL_ACCESS_TOKEN: ${{ secrets.PROTON_PASS_TEST_PAT }}
+          TEST_SECRET: ${{ vars.PROTON_PASS_TEST_URI }}
+
+      - name: Verify output is non-empty and masked
+        run: |
+          if [ -z "${{ steps.secrets.outputs.TEST_SECRET }}" ]; then
+            echo "Output was empty" && exit 1
+          fi
+          echo "Secret loaded: ${{ steps.secrets.outputs.TEST_SECRET }}"
+
+  integration-export-env:
+    name: Integration (export-env)
+    runs-on: ubuntu-latest
+    if: ${{ secrets.PROTON_PASS_TEST_PAT != '' }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Load secrets as env vars
+        uses: ./
+        with:
+          export-env: 'true'
+        env:
+          PROTON_PASS_PERSONAL_ACCESS_TOKEN: ${{ secrets.PROTON_PASS_TEST_PAT }}
+          TEST_SECRET: ${{ vars.PROTON_PASS_TEST_URI }}
+
+      - name: Verify env var is set and masked
+        run: |
+          if [ -z "$TEST_SECRET" ]; then
+            echo "TEST_SECRET env var was empty" && exit 1
+          fi
+          echo "Secret: $TEST_SECRET"

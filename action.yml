@@ -1,0 +1,31 @@
+name: 'Load Proton Pass Secrets'
+description: 'Installs pass-cli and exports secrets from Proton Pass as step outputs or env vars'
+branding:
+  icon: 'lock'
+  color: 'purple'
+inputs:
+  version:
+    description: 'Version of pass-cli to install. Defaults to latest.'
+    required: false
+    default: 'latest'
+  hash:
+    description: >
+      Expected SHA256 hash of the downloaded binary.
+      If omitted the hash is fetched from the official .sha256 release file.
+    required: false
+    default: ''
+  platform:
+    description: >
+      Target platform. Auto-detected from the runner if omitted.
+      Valid values: linux-aarch64, linux-x86_64, macos-aarch64, macos-x86_64, windows-x86_64
+    required: false
+    default: ''
+  export-env:
+    description: >
+      When true, secrets are also exported as environment variables for subsequent steps.
+      Defaults to false. Secrets are only available as step outputs.
+    required: false
+    default: 'false'
+runs:
+  using: 'node24'
+  main: 'src/index.js'
