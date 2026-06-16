@@ -2,8 +2,67 @@
 
 jest.mock('child_process')
 
+const os = require('os')
 const { execFileSync } = require('child_process')
-const { findSecretRefs, isSessionValid, login } = require('../src/secrets')
+const { setupSession, findSecretRefs, isSessionValid, login } = require('../src/secrets')
+
+describe('setupSession', () => {
+  let savedEnv
+
+  beforeEach(() => {
+    savedEnv = {
+      PROTON_PASS_SESSION_DIR: process.env.PROTON_PASS_SESSION_DIR,
+      PROTON_PASS_KEY_PROVIDER: process.env.PROTON_PASS_KEY_PROVIDER,
+      RUNNER_TEMP: process.env.RUNNER_TEMP,
+    }
+    delete process.env.PROTON_PASS_SESSION_DIR
+    delete process.env.PROTON_PASS_KEY_PROVIDER
+    delete process.env.RUNNER_TEMP
+  })
+
+  afterEach(() => {
+    for (const [key, val] of Object.entries(savedEnv)) {
+      if (val === undefined) delete process.env[key]
+      else process.env[key] = val
+    }
+  })
+
+  const makeCore = () => ({ info: jest.fn(), exportVariable: jest.fn() })
+
+  test('creates a session dir when PROTON_PASS_SESSION_DIR is not set', () => {
+    const core = makeCore()
+    setupSession(core)
+    expect(process.env.PROTON_PASS_SESSION_DIR).toMatch(/proton-pass-session-/)
+    expect(core.exportVariable).toHaveBeenCalledWith(
+      'PROTON_PASS_SESSION_DIR',
+      process.env.PROTON_PASS_SESSION_DIR,
+    )
+  })
+
+  test('reuses existing PROTON_PASS_SESSION_DIR', () => {
+    process.env.PROTON_PASS_SESSION_DIR = os.tmpdir()
+    const core = makeCore()
+    setupSession(core)
+    expect(process.env.PROTON_PASS_SESSION_DIR).toBe(os.tmpdir())
+    expect(core.exportVariable).toHaveBeenCalledWith('PROTON_PASS_SESSION_DIR', os.tmpdir())
+  })
+
+  test('always sets PROTON_PASS_KEY_PROVIDER to fs', () => {
+    const core = makeCore()
+    setupSession(core)
+    expect(process.env.PROTON_PASS_KEY_PROVIDER).toBe('fs')
+    expect(core.exportVariable).toHaveBeenCalledWith('PROTON_PASS_KEY_PROVIDER', 'fs')
+  })
+
+  test('uses RUNNER_TEMP as base when set', () => {
+    process.env.RUNNER_TEMP = os.tmpdir()
+    const core = makeCore()
+    setupSession(core)
+    expect(process.env.PROTON_PASS_SESSION_DIR).toMatch(
+      new RegExp(`^${os.tmpdir().replace(/[/\\]/g, '[/\\\\]')}`),
+    )
+  })
+})
 
 describe('findSecretRefs', () => {
   test('finds all pass:// values', () => {

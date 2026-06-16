@@ -13,7 +13,7 @@ const {
   fetchRemoteChecksum,
 } = require('./download')
 const { installBinary } = require('./install')
-const { findSecretRefs, isSessionValid, login, fetchSecret } = require('./secrets')
+const { setupSession, findSecretRefs, isSessionValid, login, fetchSecret } = require('./secrets')
 
 function isPassCliInstalled() {
   try {
@@ -68,6 +68,8 @@ async function run() {
 
       await installBinary({ binaryPath, platform, version, toolCache, core })
     }
+
+    setupSession(core)
 
     // authenticate (skip if session already active from a prior step in this job)
     if (isSessionValid()) {

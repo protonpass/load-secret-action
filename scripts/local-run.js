@@ -73,8 +73,8 @@ console.log('')
 // run the action
 require('../src/index')
 
-// Show outputs after async work completes
-setTimeout(() => {
+// Print results once the action's async work has completed and the event loop is idle.
+process.on('beforeExit', () => {
   const outputs = readFileSync(outputFile, 'utf8').trim()
   if (outputs) {
     console.log('\n=== Step outputs (values masked) ===')
@@ -92,4 +92,4 @@ setTimeout(() => {
       if (key) console.log(`  ${key}=***`)
     })
   }
-}, 30_000)
+})
