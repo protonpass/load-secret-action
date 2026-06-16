@@ -1,6 +1,9 @@
 'use strict'
 
-const { findSecretRefs } = require('../src/secrets')
+jest.mock('child_process')
+
+const { execFileSync } = require('child_process')
+const { findSecretRefs, isSessionValid, login } = require('../src/secrets')
 
 describe('findSecretRefs', () => {
   test('finds all pass:// values', () => {
@@ -43,5 +46,54 @@ describe('findSecretRefs', () => {
   test('handles a single secret ref', () => {
     const refs = findSecretRefs({ TOKEN: 'pass://Vault/Item/password' })
     expect(refs).toEqual([{ key: 'TOKEN', uri: 'pass://Vault/Item/password' }])
+  })
+})
+
+describe('isSessionValid', () => {
+  beforeEach(() => jest.resetAllMocks())
+
+  test('returns true when pass-cli info succeeds', () => {
+    execFileSync.mockReturnValue('')
+    expect(isSessionValid()).toBe(true)
+    expect(execFileSync).toHaveBeenCalledWith('pass-cli', ['info'], { stdio: 'pipe' })
+  })
+
+  test('returns false when pass-cli info fails', () => {
+    execFileSync.mockImplementation(() => {
+      throw new Error('not authenticated')
+    })
+    expect(isSessionValid()).toBe(false)
+  })
+})
+
+describe('login', () => {
+  beforeEach(() => jest.resetAllMocks())
+
+  test('calls pass-cli login with PAT in environment', () => {
+    execFileSync.mockReturnValue('')
+    login('my-pat')
+    expect(execFileSync).toHaveBeenCalledWith(
+      'pass-cli',
+      ['login'],
+      expect.objectContaining({
+        env: expect.objectContaining({ PROTON_PASS_PERSONAL_ACCESS_TOKEN: 'my-pat' }),
+      }),
+    )
+  })
+
+  test('throws with exit code on failure', () => {
+    const err = new Error('login failed')
+    err.status = 1
+    execFileSync.mockImplementation(() => {
+      throw err
+    })
+    expect(() => login('my-pat')).toThrow('pass-cli login failed with exit code 1')
+  })
+
+  test('throws with unknown exit code when status is not set', () => {
+    execFileSync.mockImplementation(() => {
+      throw new Error('login failed')
+    })
+    expect(() => login('my-pat')).toThrow('pass-cli login failed with exit code unknown')
   })
 })

@@ -52,7 +52,7 @@ Secrets are identified by scanning the step's environment variables for values t
 
 ### Using install-cli-action in a prior step
 
-If `pass-cli` is already in `PATH` (e.g. from a previous `install-cli-action` step), this action skips the download entirely and goes straight to resolving secrets.
+If `pass-cli` is already in `PATH` (e.g. from a previous `install-cli-action` step), this action skips the download. If a valid session is already present (e.g. from a prior `pass-cli-load-secret-action` step in the same job), it also skips login.
 
 ```yaml
 - uses: protonpass/install-cli-action@v1

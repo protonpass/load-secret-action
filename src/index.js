@@ -13,7 +13,7 @@ const {
   fetchRemoteChecksum,
 } = require('./download')
 const { installBinary } = require('./install')
-const { findSecretRefs, fetchSecret } = require('./secrets')
+const { findSecretRefs, isSessionValid, login, fetchSecret } = require('./secrets')
 
 function isPassCliInstalled() {
   try {
@@ -67,6 +67,15 @@ async function run() {
       core.info('Hash OK')
 
       await installBinary({ binaryPath, platform, version, toolCache, core })
+    }
+
+    // authenticate (skip if session already active from a prior step in this job)
+    if (isSessionValid()) {
+      core.info('pass-cli session already active, skipping login')
+    } else {
+      core.info('Logging in to Proton Pass...')
+      login(pat)
+      core.info('Login successful')
     }
 
     // resolve secrets
