@@ -3,8 +3,16 @@
 jest.mock('child_process')
 
 const os = require('os')
+const path = require('path')
+const { symlinkSync, mkdtempSync, rmdirSync, unlinkSync } = require('fs')
 const { execFileSync } = require('child_process')
-const { setupSession, findSecretRefs, isSessionValid, login } = require('../src/secrets')
+const {
+  setupSession,
+  findSecretRefs,
+  isSessionValid,
+  login,
+  fetchSecret,
+} = require('../src/secrets')
 
 describe('setupSession', () => {
   let savedEnv
@@ -40,11 +48,20 @@ describe('setupSession', () => {
   })
 
   test('reuses existing PROTON_PASS_SESSION_DIR', () => {
-    process.env.PROTON_PASS_SESSION_DIR = os.tmpdir()
-    const core = makeCore()
-    setupSession(core)
-    expect(process.env.PROTON_PASS_SESSION_DIR).toBe(os.tmpdir())
-    expect(core.exportVariable).toHaveBeenCalledWith('PROTON_PASS_SESSION_DIR', os.tmpdir())
+    const existingDir = mkdtempSync(path.join(os.tmpdir(), 'secrets-test-reuse-'))
+    process.env.PROTON_PASS_SESSION_DIR = existingDir
+    try {
+      const core = makeCore()
+      setupSession(core)
+      expect(process.env.PROTON_PASS_SESSION_DIR).toBe(existingDir)
+      expect(core.exportVariable).toHaveBeenCalledWith('PROTON_PASS_SESSION_DIR', existingDir)
+    } finally {
+      try {
+        rmdirSync(existingDir)
+      } catch {
+        /* ignore */
+      }
+    }
   })
 
   test('always sets PROTON_PASS_KEY_PROVIDER to fs', () => {
@@ -61,6 +78,27 @@ describe('setupSession', () => {
     expect(process.env.PROTON_PASS_SESSION_DIR).toMatch(
       new RegExp(`^${os.tmpdir().replace(/[/\\]/g, '[/\\\\]')}`),
     )
+  })
+
+  test('throws when PROTON_PASS_SESSION_DIR is a symlink', () => {
+    const realDir = mkdtempSync(path.join(os.tmpdir(), 'secrets-test-target-'))
+    const linkPath = path.join(os.tmpdir(), `secrets-test-link-${Date.now()}`)
+    symlinkSync(realDir, linkPath)
+    process.env.PROTON_PASS_SESSION_DIR = linkPath
+    try {
+      expect(() => setupSession(makeCore())).toThrow('symbolic link')
+    } finally {
+      try {
+        unlinkSync(linkPath)
+      } catch {
+        /* ignore */
+      }
+      try {
+        rmdirSync(realDir)
+      } catch {
+        /* ignore */
+      }
+    }
   })
 })
 
@@ -154,5 +192,38 @@ describe('login', () => {
       throw new Error('login failed')
     })
     expect(() => login('my-pat')).toThrow('pass-cli login failed with exit code unknown')
+  })
+})
+
+describe('fetchSecret', () => {
+  beforeEach(() => jest.resetAllMocks())
+
+  test('calls pass-cli item view with -- terminator before URI', () => {
+    execFileSync.mockReturnValue('my-secret-value\n')
+    const result = fetchSecret('pass://Vault/Item/password')
+    expect(result).toBe('my-secret-value')
+    expect(execFileSync).toHaveBeenCalledWith(
+      'pass-cli',
+      ['item', 'view', '--', 'pass://Vault/Item/password'],
+      expect.objectContaining({ stdio: 'pipe' }),
+    )
+  })
+
+  test('throws sanitised error without stderr on failure', () => {
+    const err = new Error('some internal error')
+    err.status = 2
+    err.stderr = Buffer.from('secret content that must not leak')
+    execFileSync.mockImplementation(() => {
+      throw err
+    })
+    const thrown = (() => {
+      try {
+        fetchSecret('pass://Vault/Item/password')
+      } catch (e) {
+        return e
+      }
+    })()
+    expect(thrown.message).toContain('code 2')
+    expect(thrown.message).not.toContain('secret content that must not leak')
   })
 })
