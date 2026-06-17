@@ -5,6 +5,7 @@ const globals = require('globals')
 const prettierConfig = require('eslint-config-prettier')
 
 module.exports = [
+  { ignores: ['dist/'] },
   js.configs.recommended,
   {
     languageOptions: {
