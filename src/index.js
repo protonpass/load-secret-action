@@ -1,5 +1,6 @@
 'use strict'
 
+const fs = require('fs')
 const core = require('@actions/core')
 const toolCache = require('@actions/tool-cache')
 const { execFileSync } = require('child_process')
@@ -96,6 +97,11 @@ async function run() {
 
       core.setSecret(value) // mask in all subsequent log lines
       core.setOutput(key, value) // always expose as step output
+      // core.setOutput writes a ghadelimiter heredoc that some runners can't parse.
+      // Also write key=value so any runner that supports the simpler format works.
+      if (process.env.GITHUB_OUTPUT) {
+        fs.appendFileSync(process.env.GITHUB_OUTPUT, `${key}=${value}\n`)
+      }
 
       if (exportEnv) {
         core.exportVariable(key, value) // also propagate to subsequent steps as env var
